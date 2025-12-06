@@ -1,0 +1,12 @@
+# Ignore Python environment files
+__pycache__/
+*.pyc
+
+# Ignore system files
+.vscode/
+
+# IGNORE SECRETS IN A PUBLIC REPO (CRITICAL SECURITY STEP)
+# The actual JSON files must NEVER be in a public repo.
+# Streamlit Cloud uses st.secrets instead (which we'll set up later).
+serviceAccountKey.json
+hydroponics-logging-key.json
