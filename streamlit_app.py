@@ -1,35 +1,55 @@
 import streamlit as st
-import pandas as pd
+import json # Needed for handling potential string credentials
 import firebase_admin
 from firebase_admin import credentials, db
 import time
+import pandas as pd # Included as per requirements.txt
 
-# --- 1. Firebase Initialization (using hardcoded JSON file for simplicity) ---
-# NOTE: For security, you must convert this to use st.secrets on Streamlit Cloud.
+# --- 1. Firebase Initialization (using Streamlit Secrets) ---
+# This block runs only once when the app starts
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate("serviceAccountKey.json")
+        # Load the credentials dictionary from st.secrets (which you pasted in the UI)
+        firebase_credentials = st.secrets["firebase_key"] 
+        
+        # Check if the private key needs newline conversion (CRITICAL for certificates)
+        # This handles the fact that the private key is stored as a single string in TOML
+        if isinstance(firebase_credentials["private_key"], str):
+            firebase_credentials["private_key"] = firebase_credentials["private_key"].replace('\\n', '\n')
+
+        # Initialize Firebase using the credentials dictionary
+        cred = credentials.Certificate(firebase_credentials)
+        
         firebase_admin.initialize_app(cred, {
-            'databaseURL': 'https://hydrophonics-12345-default-rtdb.asia-southeast1.firebasedatabase.app/'
+            'databaseURL': 'https://hydrophonics-12345-default-rtdb.asia-southeast1.firebasedatabase.app/' 
         })
     except Exception as e:
-        st.error(f"Error initializing Firebase: {e}")
+        # Display the error securely and stop the application
+        st.error("❌ Fatal Error: Could not initialize Firebase.")
+        st.exception(e)
+        st.stop() 
 
 db_ref = db.reference('/')
 
 # --- 2. Data Fetching ---
-@st.cache_data(ttl=3) # Refreshes data from Firebase every 3 seconds
+# Refreshes data from Firebase every 3 seconds
+@st.cache_data(ttl=3) 
 def fetch_data():
     try:
+        # Read the entire database root
         data = db_ref.get()
         return data.get('sensors', {}), data.get('actuators', {})
     except Exception:
+        # Return empty dictionaries on failure
         return {}, {}
 
 # --- 3. Actuator Control Function ---
 def set_actuator(actuator, state):
     try:
+        # Write command directly to Firebase (e.g., /actuators/pumpA)
         db_ref.child(f'actuators/{actuator}').set(state)
+        # Clear cache to force an immediate refresh after the command is sent
+        fetch_data.clear()
     except Exception as e:
         st.error(f"Failed to send command: {e}")
 
@@ -64,10 +84,8 @@ while True:
         col_a_on, col_a_off = st.columns(2)
         if col_a_on.button("Turn Pump A ON", key="A_ON"):
             set_actuator('pumpA', 'ON')
-            st.experimental_rerun()
         if col_a_off.button("Turn Pump A OFF", key="A_OFF"):
             set_actuator('pumpA', 'OFF')
-            st.experimental_rerun()
 
         # Pump B Controls
         pumpB_status = actuators.get('pumpB_status', 'OFF')
@@ -76,9 +94,7 @@ while True:
         col_b_on, col_b_off = st.columns(2)
         if col_b_on.button("Turn Pump B ON", key="B_ON"):
             set_actuator('pumpB', 'ON')
-            st.experimental_rerun()
         if col_b_off.button("Turn Pump B OFF", key="B_OFF"):
             set_actuator('pumpB', 'OFF')
-            st.experimental_rerun()
 
     time.sleep(1) # Reruns the dashboard fetch every 1 second
