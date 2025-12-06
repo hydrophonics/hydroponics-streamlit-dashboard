@@ -1,19 +1,21 @@
 import streamlit as st
-import json # Needed for handling potential string credentials
+import json 
 import firebase_admin
 from firebase_admin import credentials, db
 import time
-import pandas as pd # Included as per requirements.txt
+import pandas as pd 
 
+# --- 1. Firebase Initialization (using Streamlit Secrets) ---
+# This block runs only once when the app starts
 if not firebase_admin._apps:
     try:
         # 1. Load the immutable secrets dictionary
         secret_data = st.secrets["firebase_key"]
         
-        # 2. CRITICAL FIX: Use the dict() constructor to create a MUTABLE copy
+        # 2. CRITICAL FIX: Use dict() constructor to create a MUTABLE copy
         firebase_credentials = dict(secret_data)
         
-        # 3. Now we can safely modify the 'private_key' field in the copy
+        # 3. Handle newline conversion for private key
         if isinstance(firebase_credentials["private_key"], str):
             firebase_credentials["private_key"] = firebase_credentials["private_key"].replace('\\n', '\n')
 
@@ -35,11 +37,9 @@ db_ref = db.reference('/')
 @st.cache_data(ttl=3) 
 def fetch_data():
     try:
-        # Read the entire database root
         data = db_ref.get()
         return data.get('sensors', {}), data.get('actuators', {})
     except Exception:
-        # Return empty dictionaries on failure
         return {}, {}
 
 # --- 3. Actuator Control Function ---
@@ -49,51 +49,51 @@ def set_actuator(actuator, state):
         db_ref.child(f'actuators/{actuator}').set(state)
         # Clear cache to force an immediate refresh after the command is sent
         fetch_data.clear()
+        st.rerun() # Forces Streamlit to rerun the app immediately
     except Exception as e:
         st.error(f"Failed to send command: {e}")
 
-# --- 4. Streamlit Dashboard Layout ---
+# --- 4. Main Dashboard Execution (Runs once per update/interaction) ---
 st.set_page_config(layout="wide")
 st.title("🧪 Automated Hydroponic System Dashboard")
-placeholder = st.empty() # Placeholder for refreshing content
 
-while True:
-    sensors, actuators = fetch_data()
+# Fetch data for the current run
+sensors, actuators = fetch_data() 
 
-    with placeholder.container():
-        st.header("Live Sensor Readings")
-        
-        # Display Sensor Metrics
-        col1, col2, col3, col4, col5, col6 = st.columns(6)
-        
-        col1.metric("pH Level", f"{sensors.get('ph', '--'):.2f}")
-        col2.metric("EC (mS/cm)", f"{sensors.get('ec', '--'):.2f}")
-        col3.metric("Water Temp (°C)", f"{sensors.get('waterTemp', '--'):.1f}")
-        col4.metric("Air Temp (°C)", f"{sensors.get('airTemp', '--'):.1f}")
-        col5.metric("Humidity (%)", f"{sensors.get('humidity', '--'):.1f}")
-        col6.metric("Water Level", sensors.get('waterlevel', '--'))
+st.header("Live Sensor Readings")
 
-        st.markdown("---")
-        st.header("Actuator Controls")
+# Display Sensor Metrics
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 
-        # Pump A Controls
-        pumpA_status = actuators.get('pumpA_status', 'OFF')
-        st.subheader(f"Nutrient Pump A (Status: **{pumpA_status}**)")
-        
-        col_a_on, col_a_off = st.columns(2)
-        if col_a_on.button("Turn Pump A ON", key="A_ON"):
-            set_actuator('pumpA', 'ON')
-        if col_a_off.button("Turn Pump A OFF", key="A_OFF"):
-            set_actuator('pumpA', 'OFF')
+col1.metric("pH Level", f"{sensors.get('ph', '--'):.2f}")
+col2.metric("EC (mS/cm)", f"{sensors.get('ec', '--'):.2f}")
+col3.metric("Water Temp (°C)", f"{sensors.get('waterTemp', '--'):.1f}")
+col4.metric("Air Temp (°C)", f"{sensors.get('airTemp', '--'):.1f}")
+col5.metric("Humidity (%)", f"{sensors.get('humidity', '--'):.1f}")
+col6.metric("Water Level", sensors.get('waterlevel', '--'))
 
-        # Pump B Controls
-        pumpB_status = actuators.get('pumpB_status', 'OFF')
-        st.subheader(f"pH Pump B (Status: **{pumpB_status}**)")
-        
-        col_b_on, col_b_off = st.columns(2)
-        if col_b_on.button("Turn Pump B ON", key="B_ON"):
-            set_actuator('pumpB', 'ON')
-        if col_b_off.button("Turn Pump B OFF", key="B_OFF"):
-            set_actuator('pumpB', 'OFF')
+st.markdown("---")
+st.header("Actuator Controls")
 
-    time.sleep(1) # Reruns the dashboard fetch every 1 second
+# Pump A Controls
+pumpA_status = actuators.get('pumpA_status', 'OFF')
+st.subheader(f"Nutrient Pump A (Status: **{pumpA_status}**)")
+
+col_a_on, col_a_off = st.columns(2)
+
+# CRITICAL FIX: The logic is now outside the infinite loop.
+# Clicking the button calls set_actuator, which calls st.rerun().
+if col_a_on.button("Turn Pump A ON", key="A_ON"):
+    set_actuator('pumpA', 'ON')
+if col_a_off.button("Turn Pump A OFF", key="A_OFF"):
+    set_actuator('pumpA', 'OFF')
+
+# Pump B Controls
+pumpB_status = actuators.get('pumpB_status', 'OFF')
+st.subheader(f"pH Pump B (Status: **{pumpB_status}**)")
+
+col_b_on, col_b_off = st.columns(2)
+if col_b_on.button("Turn Pump B ON", key="B_ON"):
+    set_actuator('pumpB', 'ON')
+if col_b_off.button("Turn Pump B OFF", key="B_OFF"):
+    set_actuator('pumpB', 'OFF')
