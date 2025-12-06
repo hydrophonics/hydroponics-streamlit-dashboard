@@ -5,27 +5,25 @@ from firebase_admin import credentials, db
 import time
 import pandas as pd # Included as per requirements.txt
 
-# --- 1. Firebase Initialization (using Streamlit Secrets) ---
-# This block runs only once when the app starts
+# --- 1. Firebase Initialization (CORRECTED using st.secrets) ---
 if not firebase_admin._apps:
     try:
-        # Load the credentials dictionary from st.secrets (which you pasted in the UI)
-        firebase_credentials = st.secrets["firebase_key"] 
+        # Load the credentials dictionary from st.secrets
+        # ⚠️ CRITICAL FIX: Use .copy() to make the dictionary mutable
+        firebase_credentials = st.secrets["firebase_key"].copy() 
         
-        # Check if the private key needs newline conversion (CRITICAL for certificates)
-        # This handles the fact that the private key is stored as a single string in TOML
+        # Now we can safely modify the private_key string in the copy
         if isinstance(firebase_credentials["private_key"], str):
             firebase_credentials["private_key"] = firebase_credentials["private_key"].replace('\\n', '\n')
 
-        # Initialize Firebase using the credentials dictionary
+        # Initialize Firebase using the now-corrected credentials dictionary
         cred = credentials.Certificate(firebase_credentials)
         
         firebase_admin.initialize_app(cred, {
             'databaseURL': 'https://hydrophonics-12345-default-rtdb.asia-southeast1.firebasedatabase.app/' 
         })
     except Exception as e:
-        # Display the error securely and stop the application
-        st.error("❌ Fatal Error: Could not initialize Firebase.")
+        st.error(f"❌ Fatal Error: Could not initialize Firebase.")
         st.exception(e)
         st.stop() 
 
