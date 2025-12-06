@@ -5,18 +5,19 @@ from firebase_admin import credentials, db
 import time
 import pandas as pd # Included as per requirements.txt
 
-# --- 1. Firebase Initialization (CORRECTED using st.secrets) ---
 if not firebase_admin._apps:
     try:
-        # Load the credentials dictionary from st.secrets
-        # ⚠️ CRITICAL FIX: Use .copy() to make the dictionary mutable
-        firebase_credentials = st.secrets["firebase_key"].copy() 
+        # 1. Load the immutable secrets dictionary
+        secret_data = st.secrets["firebase_key"]
         
-        # Now we can safely modify the private_key string in the copy
+        # 2. CRITICAL FIX: Use the dict() constructor to create a MUTABLE copy
+        firebase_credentials = dict(secret_data)
+        
+        # 3. Now we can safely modify the 'private_key' field in the copy
         if isinstance(firebase_credentials["private_key"], str):
             firebase_credentials["private_key"] = firebase_credentials["private_key"].replace('\\n', '\n')
 
-        # Initialize Firebase using the now-corrected credentials dictionary
+        # 4. Initialize Firebase using the corrected credentials dictionary
         cred = credentials.Certificate(firebase_credentials)
         
         firebase_admin.initialize_app(cred, {
